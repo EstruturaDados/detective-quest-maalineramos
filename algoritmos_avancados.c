@@ -1,9 +1,56 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Desafio Detective Quest
 // Tema 4 - Árvores e Tabela Hash
 // Este código inicial serve como base para o desenvolvimento das estruturas de navegação, pistas e suspeitos.
 // Use as instruções de cada região para desenvolver o sistema completo com árvore binária, árvore de busca e tabela hash.
+
+// Estrutura para representar uma sala na mansão
+struct sala {
+    char nome[30];
+    struct sala *esquerda;
+    struct sala *direita;
+};
+
+// Função para criar uma nova sala
+struct sala *criarSala(char nome[]) {
+    struct sala *novaSala = (struct sala *)malloc(sizeof(struct sala));
+    strcpy(novaSala->nome, nome);
+    novaSala->esquerda = NULL;
+    novaSala->direita = NULL;
+    return novaSala;
+}
+
+// Função para conectar duas salas a uma sala atual
+struct sala *conectarSalas(struct sala *esquerda, struct sala *direita, struct sala *atual) {
+    atual->esquerda = esquerda;
+    atual->direita = direita;
+    return atual;
+}
+
+void explorar(struct sala *atual) {
+    char opcao;
+
+    while (1) {
+        printf("\nVocê está na sala: %s\n", atual->nome);
+        printf("Ir para (e) esquerda, (d) direita, ou (s) sair: ");
+        scanf(" %c", &opcao);
+
+        if (opcao == 's') {
+            printf("Você decidiu sair da mansão...\n");
+            break;
+        } else if (opcao == 'e' && atual->esquerda != NULL) {
+            atual = atual->esquerda;
+        } else if (opcao == 'd' && atual->direita != NULL) {
+            atual = atual->direita;
+        } else {
+            printf("Caminho bloqueado! Escolha outro.\n");
+        }
+    }
+}
+
 
 int main() {
 
@@ -17,7 +64,25 @@ int main() {
     // - Exiba o nome da sala a cada movimento.
     // - Use recursão ou laços para caminhar pela árvore.
     // - Nenhuma inserção dinâmica é necessária neste nível.
+        // Criação das salas
+    struct sala *hall = criarSala("Hall de Entrada");
+    struct sala *biblioteca = criarSala("Biblioteca");
+    struct sala *cozinha = criarSala("Cozinha");
+    struct sala *escritorio = criarSala("Escritório");
+    struct sala *jardim = criarSala("Jardim");
+    struct sala *despensa = criarSala("Despensa");
+    struct sala *sotao = criarSala("Sótão");
 
+    // Início da exploração
+    // Conexões (árvore binária fixa)
+    hall->esquerda = biblioteca;
+    hall->direita = cozinha;
+    biblioteca->esquerda = escritorio;
+    biblioteca->direita = jardim;
+    cozinha->esquerda = despensa;
+    cozinha->direita = sotao;
+
+    explorar(hall);
     // 🔍 Nível Aventureiro: Armazenamento de Pistas com Árvore de Busca
     //
     // - Crie uma struct Pista com campo texto (string).

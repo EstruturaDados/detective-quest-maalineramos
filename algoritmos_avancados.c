@@ -12,6 +12,7 @@ struct sala {
     char nome[30];
     struct sala *esquerda;
     struct sala *direita;
+    struct sala *pai;
 };
 
 // Função para criar uma nova sala
@@ -20,6 +21,7 @@ struct sala *criarSala(char nome[]) {
     strcpy(novaSala->nome, nome);
     novaSala->esquerda = NULL;
     novaSala->direita = NULL;
+    novaSala->pai = NULL;
     return novaSala;
 }
 
@@ -30,24 +32,33 @@ struct sala *conectarSalas(struct sala *esquerda, struct sala *direita, struct s
     return atual;
 }
 
+// Exploração recursiva da mansão
 void explorar(struct sala *atual) {
+    if (atual == NULL) return;
+
+    printf("\nVocê está na sala: %s\n", atual->nome);
+
+    // Mostra opções de caminho disponíveis
+    if (atual->esquerda != NULL) printf("À esquerda: %s\n", atual->esquerda->nome);
+    if (atual->direita != NULL) printf("À direita: %s\n", atual->direita->nome);
+    if (atual->pai != NULL) printf("Voltar para: %s\n", atual->pai->nome);
+
     char opcao;
+    printf("Ir para (e) esquerda, (d) direita, (v) voltar ou (s) sair: ");
+    scanf(" %c", &opcao);
 
-    while (1) {
-        printf("\nVocê está na sala: %s\n", atual->nome);
-        printf("Ir para (e) esquerda, (d) direita, ou (s) sair: ");
-        scanf(" %c", &opcao);
-
-        if (opcao == 's') {
-            printf("Você decidiu sair da mansão...\n");
-            break;
-        } else if (opcao == 'e' && atual->esquerda != NULL) {
-            atual = atual->esquerda;
-        } else if (opcao == 'd' && atual->direita != NULL) {
-            atual = atual->direita;
-        } else {
-            printf("Caminho bloqueado! Escolha outro.\n");
-        }
+    if (opcao == 's') {
+        printf("Você decidiu sair da mansão...\n");
+        return;
+    } else if (opcao == 'e' && atual->esquerda != NULL) {
+        explorar(atual->esquerda); // chama recursivamente a sala à esquerda
+    } else if (opcao == 'd' && atual->direita != NULL) {
+        explorar(atual->direita); // chama recursivamente a sala à direita
+    } else if (opcao == 'v' && atual->pai != NULL) {
+        explorar(atual->pai); // volta para a sala pai
+    } else {
+        printf("Caminho bloqueado... tente outro.\n");
+        explorar(atual); // tenta de novo
     }
 }
 
@@ -73,14 +84,13 @@ int main() {
     struct sala *despensa = criarSala("Despensa");
     struct sala *sotao = criarSala("Sótão");
 
-    // Início da exploração
-    // Conexões (árvore binária fixa)
-    hall->esquerda = biblioteca;
-    hall->direita = cozinha;
-    biblioteca->esquerda = escritorio;
-    biblioteca->direita = jardim;
-    cozinha->esquerda = despensa;
-    cozinha->direita = sotao;
+    // Conexões entre salas
+    hall->esquerda = biblioteca; biblioteca->pai = hall;
+    hall->direita = cozinha; cozinha->pai = hall;
+    biblioteca->esquerda = escritorio; escritorio->pai = biblioteca;
+    biblioteca->direita = jardim; jardim->pai = biblioteca;
+    cozinha->esquerda = despensa; despensa->pai = cozinha;
+    cozinha->direita = sotao; sotao->pai = cozinha;
 
     explorar(hall);
     // 🔍 Nível Aventureiro: Armazenamento de Pistas com Árvore de Busca

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 // Desafio Detective Quest
 // Tema 4 - Árvores e Tabela Hash
@@ -17,8 +18,13 @@ struct sala {
 
 // Função para criar uma nova sala
 struct sala *criarSala(char nome[]) {
-    struct sala *novaSala = (struct sala *)malloc(sizeof(struct sala));
-    strcpy(novaSala->nome, nome);
+    struct sala *novaSala = malloc(sizeof(struct sala));
+    if (!novaSala) {
+        fprintf(stderr, "Erro: malloc retornou NULL\n");
+        exit(EXIT_FAILURE);
+    }
+    strncpy(novaSala->nome, nome, sizeof(novaSala->nome) - 1);
+    novaSala->nome[sizeof(novaSala->nome) - 1] = '\0';
     novaSala->esquerda = NULL;
     novaSala->direita = NULL;
     novaSala->pai = NULL;
@@ -26,39 +32,65 @@ struct sala *criarSala(char nome[]) {
 }
 
 // Função para conectar duas salas a uma sala atual
-struct sala *conectarSalas(struct sala *esquerda, struct sala *direita, struct sala *atual) {
-    atual->esquerda = esquerda;
-    atual->direita = direita;
-    return atual;
+void conectarSalas(struct sala *atual, struct sala *esq, struct sala *dir) {
+    if (!atual) return;
+    atual->esquerda = esq;
+    atual->direita = dir;
+    if (esq) esq->pai = atual;
+    if (dir) dir->pai = atual;
 }
 
-// Exploração recursiva da mansão
+// Exploração recursiva com loop de validação local
 void explorar(struct sala *atual) {
     if (atual == NULL) return;
 
-    printf("\nVocê está na sala: %s\n", atual->nome);
+    while (1) {
+        printf("\nVocê está na sala: %s\n", atual->nome);
 
-    // Mostra opções de caminho disponíveis
-    if (atual->esquerda != NULL) printf("À esquerda: %s\n", atual->esquerda->nome);
-    if (atual->direita != NULL) printf("À direita: %s\n", atual->direita->nome);
-    if (atual->pai != NULL) printf("Voltar para: %s\n", atual->pai->nome);
+        if (atual->esquerda != NULL) printf("À esquerda: %s\n", atual->esquerda->nome);
+        if (atual->direita != NULL) printf("À direita: %s\n", atual->direita->nome);
+        if (atual->pai != NULL) printf("Voltar para: %s\n", atual->pai->nome);
 
-    char opcao;
-    printf("Ir para (e) esquerda, (d) direita, (v) voltar ou (s) sair: ");
-    scanf(" %c", &opcao);
+        char opcao;
+        printf("Ir para (e) esquerda, (d) direita, (v) voltar, ou (s) sair: ");
+        if (scanf(" %c", &opcao) != 1) {
+            // limpa entrada e tenta de novo
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF) {}
+            printf("Entrada inválida. Tente novamente.\n");
+            continue;
+        }
 
-    if (opcao == 's') {
-        printf("Você decidiu sair da mansão...\n");
-        return;
-    } else if (opcao == 'e' && atual->esquerda != NULL) {
-        explorar(atual->esquerda); // chama recursivamente a sala à esquerda
-    } else if (opcao == 'd' && atual->direita != NULL) {
-        explorar(atual->direita); // chama recursivamente a sala à direita
-    } else if (opcao == 'v' && atual->pai != NULL) {
-        explorar(atual->pai); // volta para a sala pai
-    } else {
-        printf("Caminho bloqueado... tente outro.\n");
-        explorar(atual); // tenta de novo
+        opcao = tolower((unsigned char)opcao);
+
+        if (opcao == 's') {
+            printf("Você decidiu sair da mansão...\n");
+            return;
+        } else if (opcao == 'e') {
+            if (atual->esquerda != NULL) {
+                explorar(atual->esquerda); // desce para a esquerda (recursivo)
+                // quando retornar, continua aqui (voltou)
+            } else {
+                printf("Não há caminho à esquerda. Escolha outra opção.\n");
+            }
+        } else if (opcao == 'd') {
+            if (atual->direita != NULL) {
+                explorar(atual->direita); // desce para a direita (recursivo)
+            } else {
+                printf("Não há caminho à direita. Escolha outra opção.\n");
+            }
+        } else if (opcao == 'v') {
+            if (atual->pai != NULL) {
+                // chama recursivamente para o pai — alternativa: simplesmente 'return' e
+                // permitir que a chamada anterior (que entrou nesta sala) continue.
+                return; // sobe para a chamada anterior que representa a sala pai
+            } else {
+                printf("Você está no nó raiz; não há onde voltar.\n");
+            }
+        } else {
+            printf("Opção inválida. Use e/d/v/s.\n");
+        }
+        // aqui o loop repete, sem empilhar chamadas inúteis
     }
 }
 
@@ -85,14 +117,19 @@ int main() {
     struct sala *sotao = criarSala("Sótão");
 
     // Conexões entre salas
-    hall->esquerda = biblioteca; biblioteca->pai = hall;
-    hall->direita = cozinha; cozinha->pai = hall;
-    biblioteca->esquerda = escritorio; escritorio->pai = biblioteca;
-    biblioteca->direita = jardim; jardim->pai = biblioteca;
-    cozinha->esquerda = despensa; despensa->pai = cozinha;
-    cozinha->direita = sotao; sotao->pai = cozinha;
+    conectarSalas(hall, biblioteca, cozinha);
+    conectarSalas(biblioteca, escritorio, jardim);
+    conectarSalas(cozinha, despensa, sotao);
 
     explorar(hall);
+
+    free(hall);
+    free(biblioteca);
+    free(cozinha);
+    free(escritorio);
+    free(jardim);
+    free(despensa);
+    free(sotao);
     // 🔍 Nível Aventureiro: Armazenamento de Pistas com Árvore de Busca
     //
     // - Crie uma struct Pista com campo texto (string).

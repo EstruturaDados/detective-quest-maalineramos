@@ -7,6 +7,7 @@
 // Tema 4 - Árvores e Tabela Hash
 // Este código inicial serve como base para o desenvolvimento das estruturas de navegação, pistas e suspeitos.
 // Use as instruções de cada região para desenvolver o sistema completo com árvore binária, árvore de busca e tabela hash.
+#define HASH_SIZE 26
 
 // Estrutura para representar uma sala na mansão
 struct sala {
@@ -14,6 +15,20 @@ struct sala {
     struct sala *esquerda;
     struct sala *direita;
     struct sala *pai;
+};
+
+// Estrutura para representar uma pista (para o nível aventureiro)
+struct Pista {
+    char texto[100];
+    struct Pista *esquerda;
+    struct Pista *direita;
+};
+
+// Estrutura para representar um suspeito (para o nível mestre)
+struct Suspeito {
+    char nome[50];
+    struct Pista *pistas;
+    struct Suspeito *proximo; // para tratar colisões
 };
 
 // Função para criar uma nova sala
@@ -31,6 +46,128 @@ struct sala *criarSala(char nome[]) {
     return novaSala;
 }
 
+// Função para criar uma nova pista
+struct Pista* criarPista(char texto[]) {
+    struct Pista* nova = malloc(sizeof(struct Pista));
+    if (!nova) exit(EXIT_FAILURE);
+    strncpy(nova->texto, texto, sizeof(nova->texto)-1);
+    nova->texto[sizeof(nova->texto)-1] = '\0';
+    nova->esquerda = NULL;
+    nova->direita = NULL;
+    return nova;
+}
+// Função para inserir uma pista na árvore binária de busca
+struct Pista* inserirPista(struct Pista* raiz, struct Pista* nova) {
+    if (!raiz) return nova;
+    if (strcmp(nova->texto, raiz->texto) < 0)
+        raiz->esquerda = inserirPista(raiz->esquerda, nova);
+    else
+        raiz->direita = inserirPista(raiz->direita, nova);
+    return raiz;
+}
+
+// Função para listar todas as pistas em ordem alfabética
+void listarPistas(struct Pista* raiz) {
+    if (!raiz) return;
+    listarPistas(raiz->esquerda);
+    printf("- %s\n", raiz->texto);
+    listarPistas(raiz->direita);
+}
+
+// fUNção hash 
+int hash(char* nome) {
+    if (!nome || !isalpha(nome[0])) return 0;
+    return toupper(nome[0]) - 'A';
+}
+
+void inicializarHash(struct Suspeito* tabela[]) {
+    for (int i = 0; i < HASH_SIZE; i++) {
+        tabela[i] = NULL;
+    }
+}
+
+void inserirHash(struct Suspeito* tabela[], char* nomeSuspeito, char* textoPista) {
+    int h = hash(nomeSuspeito);
+    struct Suspeito* atual = tabela[h];
+
+    while (atual) {
+        if (strcmp(atual->nome, nomeSuspeito) == 0) {
+            atual->pistas = inserirPista(atual->pistas, criarPista(textoPista));
+            return;
+        }
+        atual = atual->proximo;
+    }
+
+    struct Suspeito* novo = malloc(sizeof(struct Suspeito));
+    strncpy(novo->nome, nomeSuspeito, sizeof(novo->nome) - 1);
+    novo->nome[sizeof(novo->nome) - 1] = '\0';
+    novo->pistas = criarPista(textoPista);
+    novo->proximo = tabela[h];
+    tabela[h] = novo;
+}
+
+void listarSuspeitos(struct Suspeito* tabela[]) {
+for (int i = 0; i < HASH_SIZE; i++) {
+    if (!tabela[i]) continue; // pula se não houver suspeito
+    struct Suspeito* atual = tabela[i];
+    while (atual) {
+            printf("\nSuspeito: %s\n", atual->nome);
+            listarPistas(atual->pistas);
+            atual = atual->proximo;
+        }
+    }
+}
+
+// Função para listar todas as associações suspeito ↔ pistas
+void listarAssociacoes(struct Suspeito* tabela[]) {
+    printf("\n🔍 Associações suspeito ↔ pistas:\n");
+for (int i = 0; i < HASH_SIZE; i++) {
+    if (!tabela[i]) continue; // pula se não houver suspeito
+    struct Suspeito* atual = tabela[i];
+    while (atual) {
+            printf("- %s:\n", atual->nome);
+            listarPistas(atual->pistas);
+            atual = atual->proximo;
+        }
+    }
+}
+// Função para contar o número de pistas em uma árvore
+int contarPistas(struct Pista* raiz) {
+    if (!raiz) return 0;
+    return 1 + contarPistas(raiz->esquerda) + contarPistas(raiz->direita);
+}
+// Função para verificar se uma pista já existe na árvore
+int pistaExiste(struct Pista* raiz, char* texto) {
+    if (!raiz) return 0;
+    int cmp = strcmp(texto, raiz->texto);
+    if (cmp == 0) return 1;
+    return pistaExiste(raiz->esquerda, texto) || pistaExiste(raiz->direita, texto);
+}
+
+
+// Função para encontrar o suspeito mais provável baseado no número de pistas associadas
+struct Suspeito* suspeitoMaisProvavel(struct Suspeito* tabela[], int* totalPistas) {
+    struct Suspeito* maisProvavel = NULL;
+    int maxPistas = -1;
+
+    for (int i = 0; i < HASH_SIZE; i++) {
+        struct Suspeito* atual = tabela[i];
+        while (atual) {
+            int count = contarPistas(atual->pistas);  // conta corretamente
+
+            if (count > maxPistas) {
+                maxPistas = count;
+                maisProvavel = atual;
+            }
+            atual = atual->proximo;
+        }
+    }
+
+    if (totalPistas) *totalPistas = maxPistas;
+    return maisProvavel;
+}
+
+
 // Função para conectar duas salas a uma sala atual
 void conectarSalas(struct sala *atual, struct sala *esq, struct sala *dir) {
     if (!atual) return;
@@ -41,7 +178,8 @@ void conectarSalas(struct sala *atual, struct sala *esq, struct sala *dir) {
 }
 
 // Exploração recursiva com loop de validação local
-void explorar(struct sala *atual) {
+void explorar(struct sala *atual, struct Pista** raizPistas, struct Suspeito* tabela[]) {
+    const char* culpadoFinal = "Sr. Black"; // culpado real
     if (atual == NULL) return;
 
     while (1) {
@@ -51,63 +189,148 @@ void explorar(struct sala *atual) {
         if (atual->direita != NULL) printf("À direita: %s\n", atual->direita->nome);
         if (atual->pai != NULL) printf("Voltar para: %s\n", atual->pai->nome);
 
-        char opcao;
-        printf("Ir para (e) esquerda, (d) direita, (v) voltar, ou (s) sair: ");
-        if (scanf(" %c", &opcao) != 1) {
-            // limpa entrada e tenta de novo
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF) {}
-            printf("Entrada inválida. Tente novamente.\n");
-            continue;
+        // ---- Pistas automáticas ----
+        if (strcmp(atual->nome, "Biblioteca") == 0) {
+            if (!pistaExiste(*raizPistas, "Um livro antigo sobre venenos")) {
+            *raizPistas = inserirPista(*raizPistas, criarPista("Um livro antigo sobre venenos"));
+            inserirHash(tabela, "Sr. Black", "Um livro antigo sobre venenos");
+            }
+        }
+        if (strcmp(atual->nome, "Cozinha") == 0) {
+            if (!pistaExiste(*raizPistas, "Frasco quebrado no chão")) {
+            *raizPistas = inserirPista(*raizPistas, criarPista("Frasco quebrado no chão"));
+            inserirHash(tabela, "Sra. White", "Frasco quebrado no chão");
+            }
+        }
+        if (strcmp(atual->nome, "Sótão") == 0) {
+            if (!pistaExiste(*raizPistas, "Fotografia antiga rasgada")) {
+            *raizPistas = inserirPista(*raizPistas, criarPista("Fotografia antiga rasgada"));
+            inserirHash(tabela, "Coronel Mustard", "Fotografia antiga rasgada");
+            }
         }
 
-        opcao = tolower((unsigned char)opcao);
+        char opcao;
+        printf("\n📌 Controles:\n(e) esquerda ⬅️\n(d) direita ➡️\n(v) voltar 🔙\n(p) ver pistas 📜\n(h) ver suspeitos 🕵️‍♂️\n(a) acusar 🎯\n(s) sair ❌\nDigite:");
+        char linha[10];
+        fgets(linha, sizeof(linha), stdin);
+        opcao = tolower((unsigned char)linha[0]);
+
 
         if (opcao == 's') {
-            printf("Você decidiu sair da mansão...\n");
+            printf("\nVocê decidiu sair da mansão...\n");
             return;
         } else if (opcao == 'e') {
             if (atual->esquerda != NULL) {
-                explorar(atual->esquerda); // desce para a esquerda (recursivo)
-                // quando retornar, continua aqui (voltou)
-            } else {
-                printf("Não há caminho à esquerda. Escolha outra opção.\n");
-            }
+                explorar(atual->esquerda, raizPistas, tabela);
+                continue; // Retorna ao loop após explorar
+            } else
+                printf("\nNão há caminho à esquerda.\n");
         } else if (opcao == 'd') {
             if (atual->direita != NULL) {
-                explorar(atual->direita); // desce para a direita (recursivo)
-            } else {
-                printf("Não há caminho à direita. Escolha outra opção.\n");
-            }
+                explorar(atual->direita, raizPistas, tabela);
+                continue; // Retorna ao loop após explorar
+            } else
+                printf("\nNão há caminho à direita.\n");
         } else if (opcao == 'v') {
-            if (atual->pai != NULL) {
-                // chama recursivamente para o pai — alternativa: simplesmente 'return' e
-                // permitir que a chamada anterior (que entrou nesta sala) continue.
-                return; // sobe para a chamada anterior que representa a sala pai
-            } else {
-                printf("Você está no nó raiz; não há onde voltar.\n");
+            if (atual->pai != NULL)
+                return;
+            else
+                printf("Você está no Hall — não há onde voltar.\n");
+        } else if (opcao == 'p') {
+            printf("\n📜 Pistas coletadas (%d):\n", contarPistas(*raizPistas));
+            listarPistas(*raizPistas);
+        } else if (opcao == 'h') {
+            printf("\n🕵️‍♂️ Suspeitos e pistas associadas:\n");
+            listarSuspeitos(tabela);
+            int total = 0;
+            struct Suspeito* provável = suspeitoMaisProvavel(tabela, &total);
+            if (provável) {
+                printf("\n🎯 Suspeito mais provável até agora: %s (%d pistas)\n", provável->nome, total);
             }
-        } else {
-            printf("Opção inválida. Use e/d/v/s.\n");
+
+        } else if (opcao == 'a') {
+            char chute[50];
+            printf("Quem você acusa? ");
+            fgets(chute, sizeof(chute), stdin);
+            chute[strcspn(chute, "\n")] = 0; // remove \n
+
+            if (strcmp(chute, culpadoFinal) == 0) {
+                printf("\n🎉 Parabéns! Você descobriu o culpado: %s!\n", culpadoFinal);
+                return; // termina o jogo
+            } else {
+                printf("\n❌ Erro! %s não é o culpado. Continue investigando...\n", chute);
+            }
+                       } else {
+            printf("Opção inválida.\n");
         }
-        // aqui o loop repete, sem empilhar chamadas inúteis
     }
+}
+
+void liberarPistas(struct Pista* raiz) {
+    if (!raiz) return;
+    liberarPistas(raiz->esquerda);
+    liberarPistas(raiz->direita);
+    free(raiz);
+}
+
+void liberarSuspeitos(struct Suspeito* tabela[]) {
+    for (int i=0; i<HASH_SIZE; i++) {
+        struct Suspeito* atual = tabela[i];
+        while (atual) {
+            struct Suspeito* tmp = atual->proximo;
+            liberarPistas(atual->pistas);
+            free(atual);
+            atual = tmp;
+        }
+    }
+}
+
+void liberarSalas(struct sala* raiz) {
+    if (!raiz) return;
+    liberarSalas(raiz->esquerda);
+    liberarSalas(raiz->direita);
+    free(raiz);
+}
+
+
+void mostrarCabecalho() {
+    // Limpa a tela antes do banner
+    #ifdef _WIN32
+        system("cls");
+    #else
+        system("clear");
+    #endif
+
+    // Cores ANSI
+    const char* amarelo = "\033[1;33m";
+    const char* ciano = "\033[1;36m";
+    const char* vermelho = "\033[1;31m";
+    const char* reset = "\033[0m";
+
+    printf("\n%s", amarelo);
+    printf("════════════════════════════════════════════════\n");
+    printf("             🕵️‍♀️  DETECTIVE QUEST  🕵️‍♂️\n");
+    printf("════════════════════════════════════════════════\n");
+    
+    printf("%s", ciano);
+    printf("             🏰 A MANSÃO ESPERA POR VOCÊ 🏰\n");
+    printf("        Encontre pistas e descubra o culpado!\n\n");
+    
+    printf("%s", vermelho);
+    printf("     🎯 Níveis:\n");
+    printf("        1️⃣ Novato: Exploração de salas\n");
+    printf("        2️⃣ Aventureiro: Coleta de pistas\n");
+    printf("        3️⃣ Mestre: Suspeitos e pistas\n\n");
+    
+    printf("%s", amarelo);
+    printf("════════════════════════════════════════════════\n\n");
+    printf("%s", reset);
 }
 
 
 int main() {
-
-    // 🌱 Nível Novato: Mapa da Mansão com Árvore Binária
-    //
-    // - Crie uma struct Sala com nome, e dois ponteiros: esquerda e direita.
-    // - Use funções como criarSala(), conectarSalas() e explorarSalas().
-    // - A árvore pode ser fixa: Hall de Entrada, Biblioteca, Cozinha, Sótão etc.
-    // - O jogador deve poder explorar indo à esquerda (e) ou à direita (d).
-    // - Finalize a exploração com uma opção de saída (s).
-    // - Exiba o nome da sala a cada movimento.
-    // - Use recursão ou laços para caminhar pela árvore.
-    // - Nenhuma inserção dinâmica é necessária neste nível.
-        // Criação das salas
+    mostrarCabecalho();  // 🖼 Tela inicial do jogo
+    // Inicializaação d
     struct sala *hall = criarSala("Hall de Entrada");
     struct sala *biblioteca = criarSala("Biblioteca");
     struct sala *cozinha = criarSala("Cozinha");
@@ -121,38 +344,25 @@ int main() {
     conectarSalas(biblioteca, escritorio, jardim);
     conectarSalas(cozinha, despensa, sotao);
 
-    explorar(hall);
+    struct Pista* raizPistas = NULL;
+    struct Suspeito* tabela[HASH_SIZE];
+    inicializarHash(tabela);   
 
-    free(hall);
-    free(biblioteca);
-    free(cozinha);
-    free(escritorio);
-    free(jardim);
-    free(despensa);
-    free(sotao);
-    // 🔍 Nível Aventureiro: Armazenamento de Pistas com Árvore de Busca
-    //
-    // - Crie uma struct Pista com campo texto (string).
-    // - Crie uma árvore binária de busca (BST) para inserir as pistas coletadas.
-    // - Ao visitar salas específicas, adicione pistas automaticamente com inserirBST().
-    // - Implemente uma função para exibir as pistas em ordem alfabética (emOrdem()).
-    // - Utilize alocação dinâmica e comparação de strings (strcmp) para organizar.
-    // - Não precisa remover ou balancear a árvore.
-    // - Use funções para modularizar: inserirPista(), listarPistas().
-    // - A árvore de pistas deve ser exibida quando o jogador quiser revisar evidências.
+    explorar(hall, &raizPistas, tabela);
 
-    // 🧠 Nível Mestre: Relacionamento de Pistas com Suspeitos via Hash
-    //
-    // - Crie uma struct Suspeito contendo nome e lista de pistas associadas.
-    // - Crie uma tabela hash (ex: array de ponteiros para listas encadeadas).
-    // - A chave pode ser o nome do suspeito ou derivada das pistas.
-    // - Implemente uma função inserirHash(pista, suspeito) para registrar relações.
-    // - Crie uma função para mostrar todos os suspeitos e suas respectivas pistas.
-    // - Adicione um contador para saber qual suspeito foi mais citado.
-    // - Exiba ao final o “suspeito mais provável” baseado nas pistas coletadas.
-    // - Para hashing simples, pode usar soma dos valores ASCII do nome ou primeira letra.
-    // - Em caso de colisão, use lista encadeada para tratar.
-    // - Modularize com funções como inicializarHash(), buscarSuspeito(), listarAssociacoes().
+    printf("\nJogo encerrado! Aqui estão suas descobertas finais:\n");
+    listarPistas(raizPistas);
+    listarSuspeitos(tabela);    
+    int total = 0;
+    struct Suspeito* culpado = suspeitoMaisProvavel(tabela, &total);
+    if (culpado) printf("\n🎯 Suspeito mais provável: %s com %d pistas!\n", culpado->nome, total);
+
+    listarAssociacoes(tabela);
+
+    // Liberação de memória
+    liberarSalas(hall);
+    liberarPistas(raizPistas);
+    liberarSuspeitos(tabela);
 
     return 0;
 }
